@@ -1,0 +1,154 @@
+<html>
+	<head>
+		<script type="application/javascript">
+		// canvas size
+		const canvasSize = 700;
+		// target frames per second count
+		const animationFps = 60;
+		// target animation duration in seconds
+		var animationDuration = 1;
+		
+		var currentAnimating = false;
+		
+		function onLoad() {
+			var canvas = document.getElementById('canvas');
+			var ctx = canvas.getContext("2d");
+		
+			ctx.clearRect(0, 0, canvas.width, canvas.height)
+			drawBorder(ctx);
+			drawShape(ctx);
+		}
+		
+		function drawBorder(canvasContext) {
+			canvasContext.beginPath();
+			canvasContext.moveTo(0, 0);
+			canvasContext.lineTo(canvasSize, 0);
+			canvasContext.lineTo(canvasSize, canvasSize);
+			canvasContext.lineTo(0, canvasSize);
+		
+			canvasContext.closePath();
+			canvasContext.stroke();
+		}
+		
+		function drawShape(ctx) {
+			ctx.beginPath();
+			ctx.moveTo(0, 0);
+			ctx.lineTo(canvasSize * .4, 0);
+			ctx.lineTo(canvasSize * .4, canvasSize * .4);
+			ctx.lineTo(canvasSize, canvasSize * .4);
+			ctx.lineTo(canvasSize, canvasSize);
+			ctx.lineTo(0, canvasSize);
+			ctx.fill();
+		}
+		
+		function readAnimationSpeed() {
+			var input = document.getElementById('animationSpeed');
+			if (isNaN(input.value))
+				input.value = animationDuration;
+			else if (input.value <= 0)
+				input.value = animationDuration;
+			else if (input.value > 5)
+				input.value = animationDuration;
+			else
+				animationDuration = input.value;
+		}
+		
+		async function animate(scaleX, scaleY, posX, posY, rotation, color) {
+			// return from this call if there is already animation running
+			// to avoid launching two animations at the same time
+			if (currentAnimating)
+				return;
+			currentAnimating = true;
+		
+			readAnimationSpeed();
+			var canvas = document.getElementById('canvas');
+			var ctx = canvas.getContext("2d");
+		
+			// calculate total frames
+			var frames = animationFps * animationDuration;
+		
+			var currentScaleX = 1;
+			var currentScaleY = 1;
+			var currentPosX = 0;
+			var currentPosY = 0;
+			var currentRot = 0;
+		
+			// calculate how much to increment each frame
+			var scaleXStep = (currentScaleX - scaleX) / frames;
+			var scaleYStep = (currentScaleY - scaleY) / frames;
+			var positionXStep = posX / frames;
+			var positionYStep = posY / frames;
+			var rotationStep = rotation / frames;
+		
+			// draw each frame
+			for (i = 0; i < frames; i++) {
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+				drawBorder(ctx);
+				ctx.save();
+		
+				ctx.fillStyle = color;
+				ctx.translate(currentPosX, currentPosY);
+				ctx.rotate(currentRot);
+				ctx.scale(currentScaleX, currentScaleY);
+				drawShape(ctx);
+				ctx.restore();
+		
+				// wait until next frame
+				await sleep(1000 / animationFps);
+		
+				currentScaleX -= scaleXStep;
+				currentScaleY -= scaleYStep;
+				currentPosX += positionXStep;
+				currentPosY += positionYStep;
+				currentRot += rotationStep;
+			}
+		
+			// draw last frame with exact parameters that were passed into the method
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			drawBorder(ctx);
+			ctx.save();
+			ctx.fillStyle = color;
+			ctx.translate(posX, posY);
+			ctx.rotate(rotation);
+			ctx.scale(scaleX, scaleY);
+			drawShape(ctx);
+			ctx.restore();
+		
+			// mark that animation finished
+			currentAnimating = false;
+		}
+		
+		function sleep(ms) {
+			return new Promise(resolve => setTimeout(resolve, ms));
+		}
+		
+		function animation1() {
+			animate(.5, .5, 0, 0, 0, 'blue');
+		}
+		
+		function animation2() {
+			animate(-.5, .5, canvasSize / 2, canvasSize / 2, -Math.PI, 'red');
+		}
+		
+		function animation3() {
+			animate(-.5, .5, canvasSize / 2, canvasSize / 2, -Math.PI / 2, 'green');
+		}
+		
+		function animation4() {
+			animate(.25, .25, canvasSize / 4, canvasSize * .75, -Math.PI / 2, 'orange');
+		}
+		</script>
+	</head>
+	<body onload="onLoad();">
+		<div>
+			<label>Animation duration in seconds:</label>
+			<input type="number" id="animationSpeed" value="1"><br><br>
+			<button onclick="animation1();">Animation 1</button>
+			<button onclick="animation2();">Animation 2</button>
+			<button onclick="animation3();">Animation 3</button>
+			<button onclick="animation4();">Animation 4</button>
+			<br><br>
+		</div>
+		<canvas id="canvas" width="700" height="700"></canvas>
+	</body>
+</html>

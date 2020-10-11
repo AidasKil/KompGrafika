@@ -1,0 +1,93 @@
+<html>
+	<head>
+		<script type="application/javascript">
+		const canvasSize = 700;
+		var ctx;
+		
+		function draw() {
+			var slider = document.getElementById('slider');
+			var sliderLabel = document.getElementById('sliderLabel');
+			sliderLabel.innerHTML = slider.value;
+			var canvas = document.getElementById('canvas');
+			ctx = canvas.getContext("2d");
+		
+			ctx.clearRect(0, 0, canvas.width, canvas.height)
+			// Draw border
+			ctx.beginPath();
+			ctx.moveTo(0, 0);
+			ctx.lineTo(canvasSize, 0);
+			ctx.lineTo(canvasSize, canvasSize);
+			ctx.lineTo(0, canvasSize);
+			ctx.closePath();
+			ctx.stroke();
+		
+			ctx.save();
+			drawRecursive(slider.value, true);
+			ctx.restore();
+		}
+		
+		function drawRecursive(step, setColor) {
+			if (step > 0) {
+				step = step - 1;
+				ctx.save();
+				ctx.save();
+				ctx.save();
+		
+				// draw upper left
+				if (setColor == true)
+					ctx.fillStyle = 'blue';
+					
+				ctx.transform(0.5, 0, 0, 0.5, 0, 0);
+				drawRecursive(step, false);
+		
+				// draw upper right
+				ctx.restore();
+				if (setColor == true)
+					ctx.fillStyle = 'red';
+					
+				var angle = Math.PI;
+				ctx.transform(Math.cos(angle) * (-.5), Math.sin(angle) * (-.5), -Math.sin(angle) * .5, Math.cos(angle) * .5, canvasSize / 2, canvasSize / 2);
+				drawRecursive(step, false);
+		
+				// draw bottom right
+				ctx.restore();
+				if (setColor == true)
+					ctx.fillStyle = 'green';
+					
+				angle = -Math.PI / 2;
+				ctx.transform(Math.cos(angle) * (-.5), Math.sin(angle) * (-.5), -Math.sin(angle) * (.5), Math.cos(angle) * .5, canvasSize / 2, canvasSize / 2);
+				drawRecursive(step, false);
+		
+				// draw bottom left
+				ctx.restore();
+				if (setColor == true)
+					ctx.fillStyle = 'orange';
+					
+				angle = -Math.PI / 2;
+				ctx.transform(Math.cos(angle) * .25, Math.sin(angle) * (.25), -Math.sin(angle) * .25, Math.cos(angle) * .25, canvasSize / 4, canvasSize * .75);
+				drawRecursive(step, false);
+			} else drawShape();
+		
+		}
+		
+		function drawShape() {
+			ctx.beginPath();
+			ctx.moveTo(0, 0);
+			ctx.lineTo(canvasSize * .4, 0);
+			ctx.lineTo(canvasSize * .4, canvasSize * .4);
+		
+			ctx.lineTo(canvasSize, canvasSize * .4);
+			ctx.lineTo(canvasSize, canvasSize);
+			ctx.lineTo(0, canvasSize);
+			ctx.fill();
+		}
+		</script>
+	</head>
+	<body onload="draw();">
+		<div>
+			<input type="range" min="0" max="7" value="0" class="slider" id="slider" oninput="draw();">
+			<label id="sliderLabel">0</label>
+		</div>
+		<canvas id="canvas" width="700" height="700"></canvas>
+	</body>
+</html>
