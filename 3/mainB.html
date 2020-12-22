@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+    <title>3B</title>
+    <style>
+        body{
+            /* set margin to 0 and overflow to hidden, to go fullscreen */
+            margin: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Div which will hold the Output -->
+<div id="WebGL-output">
+</div>
+
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.js"></script>    
+<script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.119.0/build/three.module.js';
+    import {
+        OrbitControls
+    } from 'https://unpkg.com/three@0.119.0/examples/jsm/controls/OrbitControls.js';
+    import {
+        ConvexGeometry
+    } from 'https://unpkg.com/three@0.119.0/examples/jsm/geometries/ConvexGeometry.js';
+
+    let camera, controls, scene, renderer;
+    let useWireframe = false;
+    let settingsObject;
+    let c2Model;
+    let c3Model;
+    let rook;
+    let c3Initialized = false;
+    let c2Cone;
+    let c2ConeMesh;
+
+    init();
+    //render(); // remove when using next line for animation loop (requestAnimationFrame)
+    animate();
+
+    function init() {
+
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xcccccc);
+
+        renderer = new THREE.WebGLRenderer({
+            antialias: true
+        });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        addGUI();
+        addLighting();
+
+        renderBoard();
+        renderRook();
+        c2Model = createCameraMesh(true);
+        c3Model = createCameraMesh(false);
+
+        initCamera();
+        //initCamera1();
+        initCamera2();
+        initCamera3();
+
+
+        window.addEventListener('resize', onWindowResize, false);
+
+    }
+
+    function addGUI() {
+        settingsObject = {
+            c1Fov: 50,
+            c2Fov: 50,
+            c1: true,
+            c2: false,
+            c3: false,
+            animate: false,
+            renderC2: false,
+            renderC3: false,
+
+            useC1: function() {
+                updateCamera(1);
+            },
+            useC2: function() {
+                updateCamera(2);
+            },
+            useC3: function() {
+                updateCamera(3);
+            },
+            animateRook: function() {
+                this.animate = !this.animate;
+                animateRook();
+            }
+        };
+
+        var gui = new dat.gui.GUI();
+        gui.remember(settingsObject);
+
+        gui.add(settingsObject, 'c1Fov').min(1).max(179).step(1).onChange(() => initCamera1());
+        gui.add(settingsObject, 'c2Fov').min(1).max(179).step(1).onChange(() => initCamera2());
+        gui.add(settingsObject, 'useC1');
+        gui.add(settingsObject, 'useC2').onChange(() => updateCamera(2));
+        gui.add(settingsObject, 'useC3').onChange(() => updateCamera(3));
+        gui.add(settingsObject, 'animateRook').onChange(() => animateRook());
+        gui.add(settingsObject, 'renderC2').onChange(() => renderC2());
+        gui.add(settingsObject, 'renderC3').onChange(() => renderC3());
+    }
+
+    function renderC2() {
+        if (settingsObject.renderC2)
+            scene.add(c2Model);
+        else scene.remove(c2Model);
+    }
+
+    function renderC3() {
+        if (settingsObject.renderC3)
+            scene.add(c3Model);
+        else scene.remove(c3Model);
+    }
+
+    function updateCamera(id) {
+        // disables/enables cameras
+        settingsObject.c1 = settingsObject.c2 = settingsObject.c3 = false;
+
+        if (id == 1) {
+            settingsObject.c1 = true;
+            initCamera1();
+            c3Initialized = false;
+        } else if (id == 2) {
+            settingsObject.animate = false;
+            settingsObject.c2 = true;
+            initCamera2();
+            c3Initialized = false;
+        } else if (id == 3) {
+            settingsObject.c3 = true;
+            initCamera3();
+        }
+    }
+
+    function initCamera() {
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 1000);
+        camera.position.set(20, 10, 0);
+        camera.set
+
+        controls = new OrbitControls(camera, renderer.domElement);
+
+        controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
+        controls.dampingFactor = 0.05;
+
+        controls.screenSpacePanning = false;
+
+        controls.minDistance = 1;
+        controls.maxDistance = 500;
+
+        controls.maxPolarAngle = Math.PI / 2;
+    }
+
+    function initCamera1() {
+        if (!settingsObject.c1)
+            return;
+
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 1000);
+        camera.fov = settingsObject.c1Fov;
+        camera.position.set(20, 10, -10);
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+    }
+
+    function initCamera2() {
+        const width = 20;
+        const c2Fov = settingsObject.c2Fov;
+        const fovRad = c2Fov * (Math.PI / 180);
+        const distance = width / (2 * Math.tan(fovRad / 2));
+
+        const tempCamera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
+
+        tempCamera.fov = c2Fov;
+
+        tempCamera.position.set(rook.position.x + distance + .8, 2.45 + .5, 0);
+        tempCamera.lookAt(rook.position.x, 2.45 + .5, rook.position.z);
+        tempCamera.updateProjectionMatrix();
+
+        // visible height
+        var height = 2 * Math.tan(fovRad / 2) * (distance);
+        // visible width
+        var vwidth = height * tempCamera.aspect;
+
+        // set scale for camera 2 cone
+        c2Cone.scale.set(distance + 1.25, height / Math.sqrt(2), vwidth / Math.sqrt(2));
+        // set position for camera 2 model
+        c2Model.position.set(tempCamera.position.x + 3, tempCamera.position.y, tempCamera.position.z);
+        c2Model.rotation.set(tempCamera.rotation.x, tempCamera.rotation.y, tempCamera.rotation.z);
+
+        if (settingsObject.c2)
+            camera = tempCamera;
+    }
+
+
+    function initCamera3() {
+        const tempCamera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 3, 1000);
+        tempCamera.position.set(0, 13, 0);
+        tempCamera.lookAt(rook.position);
+        const currentRotation = c3Model.rotation.clone();
+
+        // smoothly rotate when rook is going directly under the camera3
+        if (c3Initialized && Math.abs(currentRotation.z - tempCamera.rotation.z) > Math.PI / 180) // if more than one degree
+        {
+            const sign = Math.abs(currentRotation.z - tempCamera.rotation.z) / (currentRotation.z - tempCamera.rotation.z);
+            tempCamera.rotation.set(tempCamera.rotation.x, tempCamera.rotation.y, currentRotation.z - Math.PI / 60 * sign);
+        }
+        tempCamera.updateProjectionMatrix();
+
+        // set position for camera 3 model
+        c3Model.position.set(tempCamera.position.x, tempCamera.position.y, tempCamera.position.z);
+        c3Model.rotation.set(tempCamera.rotation.x, tempCamera.rotation.y, tempCamera.rotation.z);
+        c3Initialized = true;
+
+        if (settingsObject.c3) {
+            camera = tempCamera;
+        }
+    }
+
+    function onWindowResize() {
+
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+    }
+
+    async function animateRook() {
+        // animates rook movement
+        const limitN = -7.5;
+        const limitP = 7.5;
+        const fps = 60;
+
+        let speed = 0.1;
+        while (true) {
+            if (!settingsObject.animate)
+                return;
+
+            rook.position.x += speed;
+            if (rook.position.x <= limitN || rook.position.x >= limitP) {
+                speed *= -1;
+                rook.position.x += speed;
+            }
+            initCamera3();
+
+            await new Promise(r => setTimeout(r, 1000 / fps));
+        }
+    }
+
+    function animate() {
+
+        requestAnimationFrame(animate);
+        if (controls)
+            controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = true
+
+        render();
+
+    }
+
+    function renderBoard() {
+        // renders chess board
+        const loader = new THREE.TextureLoader();
+
+        // https://ibb.co/6D4LWRM
+        const map = loader.load('https://i.ibb.co/bNrDKg0/checkers.jpg');
+        map.wrapS = THREE.RepeatWrapping;
+        map.wrapT = THREE.RepeatWrapping;
+        map.repeat.set(1, 1);
+
+        const geometry = new THREE.CubeGeometry(2.2 * 8, .5, 2.2 * 8);
+        const texturedMaterial = new THREE.MeshLambertMaterial({
+            map: map,
+            wireframe: useWireframe
+        });
+
+        const board = new THREE.Mesh(geometry, texturedMaterial);
+        board.position.set(0, .25, 0);
+
+        // ignore first 4 faces
+        board.geometry.faceVertexUvs[0] = [];
+        for (let i = 0; i < 4; i++) {
+            board.geometry.faceVertexUvs[0].push(
+                [
+                    new THREE.Vector2(0, 0),
+                    new THREE.Vector2(0, 0),
+                    new THREE.Vector2(0, 0),
+                ]);
+        }
+        // set values for top faces
+        board.geometry.faceVertexUvs[0].push(
+            [
+                new THREE.Vector2(0, 8 / 6),
+                new THREE.Vector2(0, 0),
+                new THREE.Vector2(8 / 10, 8 / 6),
+            ]);
+
+        board.geometry.faceVertexUvs[0].push(
+            [
+                new THREE.Vector2(0, 0),
+                new THREE.Vector2(8 / 10, 0),
+                new THREE.Vector2(8 / 10, 8 / 6),
+            ]);
+        board.geometry.uvsNeedUpdate = true;
+
+        scene.add(board);
+    }
+
+    function renderRook() {
+        // renders rook
+        rook = new THREE.Group();
+        // base vertices
+        var points = [
+            new THREE.Vector2(0, 0),
+            new THREE.Vector2(.8, 0),
+            new THREE.Vector2(.8, .2),
+            new THREE.Vector2(.95, .2),
+            new THREE.Vector2(.95, .2),
+            new THREE.Vector2(.90, .8),
+            new THREE.Vector2(.75, .9),
+            new THREE.Vector2(.85, 1.1),
+            new THREE.Vector2(.9, 1.3),
+            new THREE.Vector2(.8, 1.65),
+            new THREE.Vector2(.7, 1.7),
+            new THREE.Vector2(.75, 1.8),
+            new THREE.Vector2(.8, 1.9),
+            new THREE.Vector2(.75, 2),
+            new THREE.Vector2(.7, 2.1),
+            new THREE.Vector2(.65, 2.3),
+            new THREE.Vector2(.63, 2.6),
+            new THREE.Vector2(.60, 2.8),
+            new THREE.Vector2(.60, 3),
+            new THREE.Vector2(.60, 3.2),
+            new THREE.Vector2(.60, 3.4),
+            new THREE.Vector2(.60, 3.6),
+            new THREE.Vector2(.60, 3.8),
+            new THREE.Vector2(.60, 4.0),
+            new THREE.Vector2(.65, 4.1),
+            new THREE.Vector2(.7, 4.2),
+            new THREE.Vector2(.65, 4.3),
+            new THREE.Vector2(.6, 4.4),
+            new THREE.Vector2(.8, 4.5),
+            new THREE.Vector2(.6, 4.5),
+            new THREE.Vector2(.6, 4.4),
+            new THREE.Vector2(.6, 4.2),
+            new THREE.Vector2(.6, 4),
+            new THREE.Vector2(0, 4),
+        ]
+
+
+        const segments = 24;
+        const baseGeometry = new THREE.LatheGeometry(points, segments);
+        const material = new THREE.MeshLambertMaterial({
+            color: 0xC0C0C0,
+            wireframe: useWireframe
+        });
+        const rookBase = new THREE.Mesh(baseGeometry, material);
+        rook.add(rookBase);
+
+        const boxesCount = segments / 4;
+        const angle = (Math.PI * 2) / segments;
+
+        const v2 = new THREE.Vector2(0, 1);
+
+        // 2PI*r
+        var c = 2 * Math.PI * .8;
+        var lankas = c / segments * 2;
+        // 2rsin(lankas/2r)
+        var styga = 2 * 1.6 * Math.sin(lankas / (2 * 1.6));
+        // size of the top boxes
+        const boxLength = styga;
+
+        const boxGeometry = new THREE.BoxGeometry(boxLength, .4, .2);
+        for (let i = 0; i < segments; i += 4) {
+            // rotate box around center of the rook
+            var xOffSet = (.65) * Math.cos(angle * (i + .5));
+            var zOffSet = (.65) * Math.sin(angle * (i + .5));
+            const box = new THREE.Mesh(boxGeometry, material);
+            box.position.set(xOffSet, 4.7, zOffSet);
+            box.lookAt(0, 4.7, 0);
+            rook.add(box);
+        }
+
+        rook.position.set(0, .5, 0);
+        scene.add(rook);
+    }
+
+    function createCameraMesh(includeCone) {
+        // creates camera mesh
+        const group = new THREE.Group();
+        const cameraMat = new THREE.MeshBasicMaterial({
+            color: 0x808080,
+            wireframe: useWireframe
+        });
+
+        const cubeG = new THREE.CubeGeometry(2, 1, .7);
+        const cubeM = new THREE.Mesh(cubeG, cameraMat);
+        group.add(cubeM);
+
+        const cylinderG = new THREE.CylinderGeometry(.7, .7, .2, 32);
+        const cylinderM1 = new THREE.Mesh(cylinderG, cameraMat);
+        cylinderM1.rotation.set(Math.PI / 2, 0, 0);
+        cylinderM1.position.set(-.5, 1, 0);
+
+        const cylinderM2 = new THREE.Mesh(cylinderG, cameraMat);
+        cylinderM2.rotation.set(Math.PI / 2, 0, 0);
+        cylinderM2.position.set(.5, 1, 0);
+
+        group.add(cylinderM1);
+        group.add(cylinderM2);
+
+        const lensCyl1G = new THREE.CylinderGeometry(.2, .2, .5, 32);
+        const lensCyl2G = new THREE.CylinderGeometry(.2, .3, .2, 32);
+        const lensCyl3G = new THREE.CylinderGeometry(.3, .3, .1, 32);
+
+        const lensCyl1m = new THREE.Mesh(lensCyl1G, cameraMat);
+        const lensCyl2m = new THREE.Mesh(lensCyl2G, cameraMat);
+        const lensCyl3m = new THREE.Mesh(lensCyl3G, cameraMat);
+
+        lensCyl1m.rotation.set(0, 0, Math.PI / 2);
+        lensCyl2m.rotation.set(0, 0, Math.PI / 2);
+        lensCyl3m.rotation.set(0, 0, Math.PI / 2);
+
+        lensCyl1m.position.set(1.25, 0, 0);
+        lensCyl2m.position.set(1.6, 0, 0);
+        lensCyl3m.position.set(1.75, 0, 0);
+
+
+        group.add(lensCyl1m);
+        group.add(lensCyl2m);
+        group.add(lensCyl3m);
+
+        // visible view cone for camera 2
+        if (includeCone) {
+            const coneGeometry = new THREE.ConeGeometry(1, 1, 4);
+            const coneMat = new THREE.MeshBasicMaterial({
+                color: 0x00FF00,
+                wireframe: true
+            });
+            c2ConeMesh = new THREE.Mesh(coneGeometry, coneMat);
+            c2ConeMesh.rotation.set(Math.PI / 4, 0, Math.PI / 2);
+            c2ConeMesh.position.set(.5, 0, 0);
+
+            // do this so cone's origin is at the tip
+            c2Cone = new THREE.Group();
+            c2Cone.add(c2ConeMesh);
+            c2Cone.position.set(1.75, 0, 0);
+            group.add(c2Cone);
+        }
+
+        var axis = new THREE.AxisHelper(5);
+        group.add(axis);
+
+        // hack for rotating camera without rewritting each component
+        group.rotation.set(0, Math.PI / 2, 0);
+        const outerGroup = new THREE.Group();
+        outerGroup.add(group);
+
+        return outerGroup;
+    }
+
+    function addLighting() {
+        var spotLight = new THREE.SpotLight(0xFFFFFF);
+        spotLight.position.set(20, 100, 20);
+
+        spotLight.castShadow = true;
+        scene.add(spotLight);
+
+        spotLight.shadowMapWidth = 1024;
+        spotLight.shadowMapHeight = 1024;
+
+        spotLight.shadow.camera.near = 0.1;
+        spotLight.shadow.camera.far = 1000;
+        spotLight.shadow.camera.fov = 50;
+
+        var ambientLight = new THREE.AmbientLight(0xFFFFFF)
+        ambientLight.position.set(100, 1000, 100);
+        ambientLight.intensity = .5;
+        scene.add(ambientLight);
+    }
+
+    function render() {
+
+        renderer.render(scene, camera);
+
+    }
+
+</script>
+</body>
+</html>
